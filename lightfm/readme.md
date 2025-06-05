@@ -1,5 +1,5 @@
-Es wurde zuerst 3 LightFM Modelle vergliechen: WARP, BPR und WARP-Kos.
-Es wurden Hyperparameter-Tuning (Optuna) und Feature Engineering (Item-Metadaten)
+Es wurde zuerst 3 LightFM Modelle erstellt und vergliechen: WARP, BPR und WARP-Kos.
+Es wurden dann Hyperparameter-Tuning (Optuna) und Feature Engineering (Item-Metadaten)
 in das beste Modell angewendet.
 
 ### 🔍 Finale Ergebnisse (bestes Modell: WARP)
@@ -45,6 +45,4 @@ Trotz Optimierungen blieben die Top-N-Metriken moderat:
 - Test AUC:           0.9115  
 
 ---
-
-**📌 Fazit:**  
 Alle Modelle erreichen eine hohe AUC, aber Precision, Recall und NDCG bleiben durch die hohe Daten-Sparsity begrenzt. Feature Engineering und Tuning helfen, aber der Cold-Start- und Top-N-Empfehlung bleibt herausfordernd.
