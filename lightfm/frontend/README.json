@@ -1,0 +1,17 @@
+{
+  "files_created": [
+    "lightfm_model.pkl - Complete LightFM model object",
+    "model_parameters.npz - Model embeddings and biases (NumPy)",
+    "train_interactions.npz - Training interaction matrix",
+    "item_features.npz - Item features matrix",
+    "model_metadata.json - Model configuration and mappings",
+    "reverse_mappings.json - ID to original value mappings",
+    "lightweight_model.json - Embeddings in JSON format for web"
+  ],
+  "usage_notes": {
+    "pkl_file": "Use for Python backend - contains full model",
+    "npz_files": "Use for NumPy/scientific computing",
+    "json_files": "Use for web frontend, JavaScript applications",
+    "lightweight_model": "Contains embeddings only, suitable for client-side predictions"
+  }
+}
