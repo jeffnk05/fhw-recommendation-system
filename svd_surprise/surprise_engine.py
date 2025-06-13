@@ -1,9 +1,7 @@
 import pandas as pd
 import numpy as np
-from collections import defaultdict
 from surprise import Dataset, Reader, SVD
 from surprise.model_selection import train_test_split
-from surprise import accuracy
 
 # ---------------------------
 # Load data
@@ -25,54 +23,6 @@ trainset, testset = train_test_split(data, test_size=0.2, random_state=42)
 # ---------------------------
 algo = SVD(n_factors=20, random_state=42)
 algo.fit(trainset)
-
-# ---------------------------
-# Evaluate with RMSE
-# ---------------------------
-predictions = algo.test(testset)
-rmse = accuracy.rmse(predictions)
-
-# ---------------------------
-# Build Top-N predictions for evaluation
-# ---------------------------
-def get_top_n(predictions, n=5):
-    top_n = defaultdict(list)
-    for uid, iid, true_r, est, _ in predictions:
-        top_n[uid].append((iid, est))
-    for uid in top_n:
-        top_n[uid].sort(key=lambda x: x[1], reverse=True)
-        top_n[uid] = top_n[uid][:n]
-    return top_n
-
-def get_ground_truth(testset, threshold=4):
-    truth = defaultdict(set)
-    for uid, iid, rating in testset:
-        if rating >= threshold:
-            truth[uid].add(iid)
-    return truth
-
-def precision_recall_ndcg(top_n, ground_truth, N=5):
-    precisions, recalls, ndcgs = [], [], []
-    for uid, pred_items in top_n.items():
-        pred_ids = [iid for (iid, _) in pred_items]
-        relevant = ground_truth.get(uid, set())
-        if not relevant:
-            continue
-        hits = [1 if iid in relevant else 0 for iid in pred_ids]
-        precision = sum(hits) / N
-        recall = sum(hits) / len(relevant)
-        dcg = sum([rel / np.log2(idx + 2) for idx, rel in enumerate(hits)])
-        ideal = sorted(hits, reverse=True)
-        idcg = sum([rel / np.log2(idx + 2) for idx, rel in enumerate(ideal)])
-        ndcg = dcg / idcg if idcg > 0 else 0
-        precisions.append(precision)
-        recalls.append(recall)
-        ndcgs.append(ndcg)
-    return np.mean(precisions), np.mean(recalls), np.mean(ndcgs)
-
-top_n = get_top_n(predictions, n=5)
-ground_truth = get_ground_truth(testset)
-precision, recall, ndcg = precision_recall_ndcg(top_n, ground_truth, N=5)
 
 # ---------------------------
 # Recommend books for a user
@@ -99,14 +49,6 @@ def recommend_for_user(user_id, algo, trainset, books_df=None, n=5):
 # MAIN
 # ---------------------------
 if __name__ == "__main__":
-    # Print evaluation metrics
-    print("\n📊 Evaluation Metrics (Top-5 Recommendations):")
-    print(f"RMSE:        {rmse:.4f}")
-    print(f"Precision@5: {precision:.4f}")
-    print(f"Recall@5:    {recall:.4f}")
-    print(f"nDCG@5:      {ndcg:.4f}")
-
-    # Optional: Load books.csv for titles
     try:
         books = pd.read_csv("books.csv", dtype=str, on_bad_lines='skip')
         books['book_id'] = books['book_id'].astype(str).str.strip()
@@ -114,10 +56,9 @@ if __name__ == "__main__":
     except:
         books = None
 
-    # Recommend for a specific user
     user_input = input("\nEnter user_id to get recommendations: ").strip()
     recommendations = recommend_for_user(user_input, algo, trainset, books_df=books, n=5)
 
-    print(f"\n📚 Top 5 book recommendations for user {user_input}:")
+    print(f"\nTop 5 book recommendations for user {user_input}:")
     for title, score in recommendations:
         print(f" - {title} (predicted rating: {score:.2f})")
