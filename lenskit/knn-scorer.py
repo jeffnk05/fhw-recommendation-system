@@ -16,9 +16,9 @@ def setup_recommender():
 
     # 2. Bestes Modell aus deinen Tests verwenden
     model_ii = ItemKNNScorer(
-        max_nbrs=50,
+        max_nbrs=20,
         min_nbrs=3,
-        min_sim=0.15
+        min_sim=0.11
     )
 
     # 3. Pipeline erstellen und trainieren
