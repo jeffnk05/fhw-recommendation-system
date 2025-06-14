@@ -31,8 +31,8 @@ def get_recommendations_for_user(pipe_ii, books_df, user_id, n_recommendations=1
     """
     Gibt Buchempfehlungen für einen User zurück
     """
-    # Empfehlungen generieren - WICHTIG: n_jobs=1 für kein Multiprocessing
-    recs = recommend(pipe_ii, [user_id], n_recommendations, n_jobs=1)
+    # Empfehlungen generieren
+    recs = recommend(pipe_ii, [user_id], n_recommendations)
     
     if not recs:
         print(f"Keine Empfehlungen für User {user_id} gefunden")
