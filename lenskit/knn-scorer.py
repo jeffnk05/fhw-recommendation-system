@@ -66,7 +66,7 @@ if __name__ == '__main__':
     
     print("=== BUCHEMPFEHLUNGEN ===")
     
-    # Empfehlungen für User 234 (aus deinem Beispiel)
+    # Empfehlungen für User 234
     get_recommendations_for_user(pipe_ii, books_df, 234, 10)
     
     # Weitere User testen
