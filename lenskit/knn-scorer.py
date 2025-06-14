@@ -9,7 +9,7 @@ from lenskit.pipeline import topn_pipeline
 
 def setup_recommender():
     """Setup Funktion für den Recommender"""
-    # 1. Daten laden (wie in deinem Notebook)
+    # 1. Daten laden 
     df = pd.read_csv('../ALS/data/ratings.csv')
     books_df = pd.read_csv('../ALS/data/books.csv')
     dataset = from_interactions_df(df, user_col='user_id', item_col='book_id', rating_col='rating')
