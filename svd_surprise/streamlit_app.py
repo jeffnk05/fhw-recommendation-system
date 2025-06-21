@@ -1,41 +1,138 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import os
+import html
+import base64
 from surprise import Dataset, Reader, SVD
 from surprise.model_selection import train_test_split
 from sklearn.decomposition import TruncatedSVD
 
-# ----------------------------
-# Load data
-# ----------------------------
-ratings = pd.read_csv("ratings.csv", dtype=str, on_bad_lines='skip')
-ratings = ratings[pd.to_numeric(ratings['rating'], errors='coerce').notnull()]
-ratings['rating'] = ratings['rating'].astype(float)
-
-books = pd.read_csv("books.csv", dtype=str, on_bad_lines='skip')
-books['book_id'] = books['book_id'].astype(str).str.strip()
-books['title'] = books['original_title'].fillna('').astype(str).str.strip()
-books['title_norm'] = books['title'].str.lower().str.strip()
-
-# ----------------------------------
-# Page Navigation
-# ----------------------------------
-page = st.sidebar.selectbox("Select a page", ["User-based Recommender", "Book-based Similarity"])
+st.set_page_config(layout="wide", page_title="Buch-Recommender", page_icon="📚")
 
 # ----------------------------
-# USER-BASED RECOMMENDER
+# Load data with caching
 # ----------------------------
-if page == "User-based Recommender":
-    st.title("📚 Book Recommender (SVD + Surprise)")
+@st.cache_data
+def load_books_and_ratings():
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    data_dir = os.path.abspath(os.path.join(base_dir, '..', 'ALS', 'data'))
+    ratings_path = os.path.join(data_dir, 'ratings.csv')
+    books_path = os.path.join(data_dir, 'books.csv')
 
+    if not os.path.exists(ratings_path):
+        st.error(f"Datei nicht gefunden: {ratings_path}")
+        st.stop()
+    if not os.path.exists(books_path):
+        st.error(f"Datei nicht gefunden: {books_path}")
+        st.stop()
+
+    ratings = pd.read_csv(ratings_path, dtype=str, on_bad_lines='skip')
+    ratings = ratings[pd.to_numeric(ratings['rating'], errors='coerce').notnull()]
+    ratings['rating'] = ratings['rating'].astype(float)
+
+    books = pd.read_csv(books_path, dtype=str, on_bad_lines='skip')
+    books['book_id'] = books['book_id'].astype(str).str.strip()
+    books['title'] = books['original_title'].fillna('').astype(str).str.strip()
+    books['title_norm'] = books['title'].str.lower().str.strip()
+    books['isbn'] = books['isbn'].astype(str).str.strip()
+
+    return books, ratings
+
+@st.cache_resource
+def train_svd_model(ratings):
     reader = Reader(rating_scale=(0, 5))
     data = Dataset.load_from_df(ratings[['user_id', 'book_id', 'rating']], reader)
     trainset = data.build_full_trainset()
     algo = SVD(n_factors=20, random_state=42)
     algo.fit(trainset)
+    return algo, trainset
+
+@st.cache_resource
+def compute_book_similarity_model(ratings_filtered):
+    user_item_matrix = ratings_filtered.pivot_table(index='user_id', columns='book_id', values='rating').fillna(0)
+    svd = TruncatedSVD(n_components=20)
+    matrix_reduced = svd.fit_transform(user_item_matrix)
+    return svd, user_item_matrix
+
+# ----------------------------------
+# Page Navigation
+# ----------------------------------
+with open("./svd_surprise/hintergrund_frontend.png", "rb") as f:
+    bg_image = base64.b64encode(f.read()).decode()
+
+st.markdown(f"""
+    <style>
+    .stApp {{
+        background-image: url("data:image/png;base64,{bg_image}");
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        background-attachment: fixed;
+    }}
+    .block-container {{
+        background-color: rgba(0, 0, 0, 0.75);
+        border-radius: 12px;
+        padding: 2rem 3rem;
+    }}
+    .sidebar-content > *:nth-child(4) {{
+        margin-top: 2rem;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        padding-top: 1rem;
+    }}
+    .recommendation-list {{
+        margin-top: 1.5rem;
+        max-width: 700px;
+        margin-left: auto;
+        margin-right: auto;
+    }}
+    .recommendation-item {{
+        font-size: 1.2rem;
+        margin-bottom: 0.6rem;
+        text-align: left;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }}
+    </style>
+""", unsafe_allow_html=True)
+
+st.sidebar.image("https://cdn-icons-png.flaticon.com/512/29/29302.png", width=80)
+st.sidebar.title("📌 Navigation")
+if st.sidebar.button("🔁 App neu laden"):
+    st.rerun()
+
+page = st.sidebar.radio("Seite wählen:", ["📖 Nutzerbasierte Empfehlungen", "🔍 Ähnliche Bücher"])
+books, ratings = load_books_and_ratings()
+
+with st.sidebar:
+    st.markdown("### 📊 Datenübersicht")
+    st.write(f"📚 Bücher im Datensatz: {len(books):,}")
+    st.write(f"🧑‍🤝‍🧑 Nutzer: {ratings['user_id'].nunique():,}")
+    st.write(f"⭐ Bewertungen: {len(ratings):,}")
+
+# ----------------------------
+# USER-BASED RECOMMENDER
+# ----------------------------
+if page == "📖 Nutzerbasierte Empfehlungen":
+    st.title("📚 Buch-Empfehlungen für Nutzer")
+    st.markdown("Erhalte personalisierte Buchvorschläge basierend auf deinen bisherigen Bewertungen.")
+
+    if 'svd_model' not in st.session_state or 'svd_trainset' not in st.session_state:
+        with st.spinner("Trainiere Recommender-Modell..."):
+            algo, trainset = train_svd_model(ratings)
+            st.session_state.svd_model = algo
+            st.session_state.svd_trainset = trainset
+    else:
+        algo = st.session_state.svd_model
+        trainset = st.session_state.svd_trainset
 
     user_ids = ratings['user_id'].unique().tolist()
-    selected_user = st.selectbox("Select a user", user_ids)
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        selected_user = st.selectbox("👤 Wähle einen Benutzer:", user_ids)
+    with col2:
+        n_recs = st.slider("🔢 Anzahl Empfehlungen:", 1, 10, 5)
 
     def get_user_ratings(user_id):
         user_ratings = ratings[ratings['user_id'] == user_id]
@@ -52,25 +149,36 @@ if page == "User-based Recommender":
 
         results = []
         for pred in top_predictions:
-            book_id = pred.iid
-            title = books[books['book_id'] == book_id]['title'].values[0] if book_id in books['book_id'].values else f"Book ID: {book_id}"
+            book_id_str = str(pred.iid).strip()
+            title_row = books[books['book_id'] == book_id_str]
+            if not title_row.empty and pd.notna(title_row['title'].values[0]):
+                title = title_row['title'].values[0]
+            else:
+                title = f"Book ID: {book_id_str}"
+            title = html.escape(title)
             results.append((title, pred.est))
         return results
 
     if selected_user:
-        st.subheader("📖 Books Rated by User")
-        st.dataframe(get_user_ratings(selected_user).rename(columns={'title': 'Book Title', 'rating': 'Rating'}))
+        with st.expander("📖 Bücher, die der Nutzer bereits bewertet hat", expanded=False):
+            st.dataframe(get_user_ratings(selected_user).rename(columns={'title': 'Buchtitel', 'rating': 'Bewertung'}))
 
-        st.subheader("✨ Recommended Books")
-        recommendations = recommend_for_user(selected_user, n=5)
-        for title, score in recommendations:
-            st.markdown(f"- **{title}** (Predicted rating: {score:.2f})")
+        with st.spinner("Berechne Empfehlungen..."):
+            recommendations = recommend_for_user(selected_user, n=n_recs)
+
+        st.markdown("### ✨ Top-Empfehlungen:")
+        with st.container():
+            st.markdown("<div class='recommendation-list'>", unsafe_allow_html=True)
+            for i, (title, score) in enumerate(recommendations, 1):
+                st.markdown(f"<div class='recommendation-item'><b>{i}. {title}</b> — ⭐ {score:.2f}</div>", unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
 
 # ----------------------------
 # BOOK-BASED SIMILARITY
 # ----------------------------
-elif page == "Book-based Similarity":
-    st.title("🔍 Similar Book Recommender (SVD + Scikit-learn)")
+elif page == "🔍 Ähnliche Bücher":
+    st.title("🔍 Ähnliche Bücher finden")
+    st.markdown("Wähle ein oder mehrere Bücher und erhalte inhaltlich ähnliche Empfehlungen.")
 
     ratings['rating'] = ratings['rating'].astype(int)
     active_users = ratings['user_id'].value_counts()
@@ -78,10 +186,7 @@ elif page == "Book-based Similarity":
     popular_books = ratings_filtered['book_id'].value_counts()
     ratings_filtered = ratings_filtered[ratings_filtered['book_id'].isin(popular_books[popular_books >= 5].index)]
 
-    user_item_matrix = ratings_filtered.pivot_table(index='user_id', columns='book_id', values='rating').fillna(0)
-    n_components = 20
-    svd = TruncatedSVD(n_components=n_components)
-    matrix_reduced = svd.fit_transform(user_item_matrix)
+    svd, user_item_matrix = compute_book_similarity_model(ratings_filtered)
     book_vectors = svd.components_.T
 
     isbn_to_idx = {isbn: idx for idx, isbn in enumerate(user_item_matrix.columns)}
@@ -109,19 +214,24 @@ elif page == "Book-based Similarity":
 
         similar_indices = np.argsort(similarities)[::-1][:top_n]
         similar_isbns = [idx_to_isbn[idx] for idx in similar_indices]
-        similar_titles = [isbn_to_title.get(isbn, f"Unknown book_id {isbn}") for isbn in similar_isbns]
+        similar_titles = [isbn_to_title.get(isbn, f"Unbekanntes Buch-ID {isbn}") for isbn in similar_isbns]
 
         return similar_titles
 
     book_titles = books['title'].dropna().unique().tolist()
-    selected_books = st.multiselect("Select one or more books you like", sorted(book_titles))
+    selected_books = st.multiselect(
+        "📚 Wähle ein oder mehrere Bücher:",
+        sorted(book_titles),
+        help="Wähle Titel aus, um ähnliche Bücher zu finden"
+    )
 
     if selected_books:
-        st.subheader("📚 Recommended Similar Books")
-        recommendations = recommend_similar_books_by_titles(selected_books, top_n=5)
+        with st.spinner("Berechne ähnliche Bücher..."):
+            recommendations = recommend_similar_books_by_titles(selected_books, top_n=5)
 
+        st.markdown("### 📘 Ähnliche Buchempfehlungen:")
         if recommendations:
             for title in recommendations:
                 st.markdown(f"- **{title}**")
         else:
-            st.warning("No recommendations found for the selected titles.")
+            st.warning("Keine Empfehlungen gefunden für die ausgewählten Titel.")
