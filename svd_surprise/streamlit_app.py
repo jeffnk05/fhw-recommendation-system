@@ -44,14 +44,14 @@ def train_svd_model(ratings):
     reader = Reader(rating_scale=(0, 5))
     data = Dataset.load_from_df(ratings[['user_id', 'book_id', 'rating']], reader)
     trainset = data.build_full_trainset()
-    algo = SVD(n_factors=20, random_state=42)
+    algo = SVD(n_factors=100, random_state=42)
     algo.fit(trainset)
     return algo, trainset
 
 @st.cache_resource
 def compute_book_similarity_model(ratings_filtered):
     user_item_matrix = ratings_filtered.pivot_table(index='user_id', columns='book_id', values='rating').fillna(0)
-    svd = TruncatedSVD(n_components=20)
+    svd = TruncatedSVD(n_components=100)
     matrix_reduced = svd.fit_transform(user_item_matrix)
     return svd, user_item_matrix
 
@@ -183,8 +183,8 @@ elif page == "🔍 Ähnliche Bücher":
     ratings['rating'] = ratings['rating'].astype(int)
     active_users = ratings['user_id'].value_counts()
     ratings_filtered = ratings[ratings['user_id'].isin(active_users[active_users >= 5].index)]
-    popular_books = ratings_filtered['book_id'].value_counts()
-    ratings_filtered = ratings_filtered[ratings_filtered['book_id'].isin(popular_books[popular_books >= 5].index)]
+    #popular_books = ratings_filtered['book_id'].value_counts()
+    #ratings_filtered = ratings_filtered[ratings_filtered['book_id'].isin(popular_books[popular_books >= 5].index)]
 
     svd, user_item_matrix = compute_book_similarity_model(ratings_filtered)
     book_vectors = svd.components_.T
