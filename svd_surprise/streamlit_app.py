@@ -235,3 +235,4 @@ elif page == "🔍 Ähnliche Bücher":
                 st.markdown(f"- **{title}**")
         else:
             st.warning("Keine Empfehlungen gefunden für die ausgewählten Titel.")
+
